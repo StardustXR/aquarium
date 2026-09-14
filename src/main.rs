@@ -1,81 +1,118 @@
-use std::f32::consts::FRAC_PI_2;
-
-use glam::{Quat, Vec3};
+use crate::entry::Entry;
+use clap::Parser;
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
-	ClientState, Context, CustomElement, Migrate, Reify, Tasker, Transformable,
-	elements::{Dial, GrabRing, Lines, shape},
+	ClientState, Context, CustomElement, Entity, Migrate, Reify, Tasker, Transformable,
+	components::{Grabbable, PointerMode},
+	elements::{FileWatcher, Lines},
 };
-use stardust_xr_fusion::{client::FrameInfo, fields::Shape, project_local_resources};
+use stardust_xr_fusion::{
+	fields::Shape,
+	project_local_resources,
+	types::{Posef, rgba_linear},
+};
+use stardust_xr_molecules::lines::{self, LineExt};
+use std::path::PathBuf;
+
+pub mod entry;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
-	stardust_xr_asteroids::client::run::<State>(&[&project_local_resources!("res")])
+	stardust_xr_asteroids::client::run::<Aquarium>(&[&project_local_resources!("res")])
 		.await
 		.unwrap();
 }
 
-#[derive(Debug, Serialize, Deserialize)] // Defining variables used in client
-pub struct State {
-	grab_pos: Vec3,
-	time: f32,
-	cube_edge_length: f32,
+#[derive(clap::Parser)]
+pub struct Args {
+	path: Option<PathBuf>,
 }
 
-impl Default for State {
-	// Defines the default value for the variables used in the client
+#[derive(Debug, Serialize, Deserialize)] // Defining variables used in client
+pub struct Aquarium {
+	#[serde(skip)]
+	pose: Posef,
+	path: PathBuf,
+	shape: Shape,
+	files: Vec<Entry>,
+}
+impl Default for Aquarium {
 	fn default() -> Self {
 		Self {
-			grab_pos: Default::default(),
-			time: Default::default(),
-			cube_edge_length: 0.1,
+			pose: Posef::default(),
+			path: std::env::home_dir().unwrap(),
+			shape: Shape::Box {
+				size: [0.75, 0.30, 0.30].into(),
+			},
+			files: vec![],
 		}
 	}
 }
-impl Migrate for State {
+impl Aquarium {
+	pub fn load_files(&mut self) {
+		self.files = std::fs::read_dir(&self.path)
+			.into_iter()
+			.flatten()
+			.flatten()
+			.map(|f| Entry {
+				path: f.path(),
+				pose: Posef::default(),
+			})
+			.collect();
+	}
+}
+impl Migrate for Aquarium {
 	type Old = Self;
 }
-impl ClientState for State {
-	const APP_ID: &'static str = "org.example.client_template";
+impl ClientState for Aquarium {
+	const APP_ID: &'static str = "org.stardustxr.Aquarium";
 
-	fn on_frame(&mut self, info: &FrameInfo) {
-		self.time += info.delta;
-	} // scale before identical scale to when it reloads
+	fn initial_state_update(&mut self) {
+		let args = Args::parse();
+		let Some(path) = args.path else { return };
+		let Ok(canonicalized) = path.canonicalize() else {
+			return;
+		};
+		self.path = canonicalized;
+	}
+
+	fn on_start(&mut self, _context: &Context, _tasks: impl Tasker<Self>) {
+		self.load_files();
+	}
 }
-impl Reify for State {
-	// Example: Cube with grab ring on the bottom (allows user to move it)
-	// and a dial on the top that allows the user to change the size of the box
+impl Reify for Aquarium {
 	fn reify(
 		&self,
 		_context: &Context,
 		_tasks: impl Tasker<Self>,
 	) -> impl stardust_xr_asteroids::Element<Self> {
-		GrabRing::new(self.grab_pos, |state: &mut Self, pos| {
-			// Creates Grabbable ring underneath box
-			state.grab_pos = pos.into();
-		})
-		.radius(self.cube_edge_length.hypot(self.cube_edge_length) / 2.0 + 0.025) // Defines radius of grab ring
-		.build()
-		.child(
-			// Cube lines
-			Lines::new(shape(Shape::Box {
-				size: [self.cube_edge_length; 3].into(),
-			})) // Creates box outline size
-			.pos([0.0, self.cube_edge_length / 2.0, 0.0]) // Updates position of box
+		Entity::new(self.shape.clone())
+			.pose(self.pose)
+			.component(
+				Grabbable::new(|state: &mut Self, pose| {
+					state.pose = pose;
+				})
+				.pointer_mode(PointerMode::Move),
+			)
 			.build()
 			.child(
-				// Dial
-				Dial::create(self.cube_edge_length, |state: &mut Self, value: f32| {
-					state.cube_edge_length = value.clamp(0.05, 0.9); // Restrict size between 0.05 &
-					// 0.9 meters
+				Lines::new(
+					lines::shape(self.shape.clone())
+						.into_iter()
+						.map(|l| l.thickness(0.005).color(rgba_linear!(0.0, 0.1, 0.2, 1.0))),
+				)
+				.build(),
+			)
+			.child(
+				FileWatcher::new(self.path.clone(), |state: &mut Self| {
+					state.load_files();
 				})
-				.turn_unit_amount(0.2) // Defines how much 1 rotation will add or subtract from cube_edge_length
-				.radius(0.05) // Defines the radius of the dial
-				.thickness(0.04) // Defines the thickness of the dial
-				.pos([0.0, self.cube_edge_length / 2.0, 0.0]) // Sets position of rotation of dial (on to of the cube)
-				.rot(Quat::from_rotation_x(-FRAC_PI_2)) // Sets orientation to correct plane
-				.build(), // Builds the object
-			),
-		) // Makes the box become a child of the ring
+				.build(),
+			)
+			.children(self.files.iter().enumerate().map(|(i, f)| {
+				f.reify_substate(_context, _tasks.clone(), move |state: &mut Self| {
+					state.files.get_mut(i)
+				})
+			}))
 	}
 }

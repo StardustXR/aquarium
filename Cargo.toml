@@ -1,5 +1,5 @@
 [package]
-name = "client-template"
+name = "aquarium"
 version = "0.52.0"
 edition = "2024"
 
@@ -8,4 +8,6 @@ glam = { version = "0.33.7", features = ["serde"] }
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "*", features = ["rt", "tokio-macros", "sync"] }
 stardust-xr-fusion = "0.52.0"
+stardust-xr-molecules = "0.52.0"
 stardust-xr-asteroids = "0.52.0"
+clap = { version = "4.6.6", features = ["derive"] }
