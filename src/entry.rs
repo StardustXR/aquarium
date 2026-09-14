@@ -6,11 +6,10 @@ use stardust_xr_asteroids::{
 };
 use stardust_xr_fusion::{fields::Shape, types::Posef};
 use stardust_xr_molecules::lines::{self, LineExt};
-use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Entry {
-	pub path: PathBuf,
+	pub name: String,
 	pub pose: Posef,
 }
 impl Reify for Entry {
@@ -31,6 +30,6 @@ impl Reify for Entry {
 			)
 			.build()
 			.child(Lines::new(lines::shape(shape).into_iter().map(|l| l.thickness(0.0025))).build())
-			.child(Text::new(self.path.file_name().unwrap().to_string_lossy()).build())
+			.child(Text::new(&self.name).build())
 	}
 }

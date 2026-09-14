@@ -1,5 +1,6 @@
 use crate::entry::Entry;
 use clap::Parser;
+use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
 	ClientState, Context, CustomElement, Entity, Migrate, Reify, Tasker, Transformable,
@@ -12,7 +13,7 @@ use stardust_xr_fusion::{
 	types::{Posef, rgba_linear},
 };
 use stardust_xr_molecules::lines::{self, LineExt};
-use std::path::PathBuf;
+use std::{collections::HashMap, fs::File, io::Write, path::PathBuf};
 
 pub mod entry;
 
@@ -28,13 +29,14 @@ pub struct Args {
 	path: Option<PathBuf>,
 }
 
-#[derive(Debug, Serialize, Deserialize)] // Defining variables used in client
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Aquarium {
 	#[serde(skip)]
 	pose: Posef,
+	#[serde(skip)]
 	path: PathBuf,
 	shape: Shape,
-	files: Vec<Entry>,
+	entries: HashMap<String, Entry>,
 }
 impl Default for Aquarium {
 	fn default() -> Self {
@@ -44,21 +46,64 @@ impl Default for Aquarium {
 			shape: Shape::Box {
 				size: [0.75, 0.30, 0.30].into(),
 			},
-			files: vec![],
+			entries: HashMap::default(),
 		}
 	}
 }
 impl Aquarium {
-	pub fn load_files(&mut self) {
-		self.files = std::fs::read_dir(&self.path)
-			.into_iter()
-			.flatten()
-			.flatten()
-			.map(|f| Entry {
-				path: f.path(),
-				pose: Posef::default(),
-			})
-			.collect();
+	pub fn ls(&mut self) -> std::io::Result<()> {
+		let entries = std::fs::read_dir(&self.path)?;
+		for entry in entries {
+			let Ok(entry) = entry else {
+				continue;
+			};
+			let file_name = entry.file_name();
+			let Some(file_name) = file_name.to_str() else {
+				continue;
+			};
+			if self.entries.contains_key(file_name) {
+				continue;
+			}
+			self.entries.insert(
+				file_name.to_string(),
+				Entry {
+					name: file_name.to_string(),
+					pose: Posef::default(),
+				},
+			);
+		}
+
+		Ok(())
+	}
+
+	pub fn config_folder_path(&self) -> PathBuf {
+		self.path.join(".aquarium")
+	}
+	pub fn config_file_path(&self) -> PathBuf {
+		self.config_folder_path().join("aquarium.ron")
+	}
+	pub fn load_config(&mut self) {
+		let pose = self.pose;
+		let Ok(config_file_contents) = std::fs::read_to_string(self.config_file_path()) else {
+			return;
+		};
+		let Ok(deserialized) = ron::from_str::<Self>(&config_file_contents) else {
+			return;
+		};
+		*self = deserialized;
+		self.pose = pose;
+	}
+	pub fn save_config(&mut self) -> std::io::Result<()> {
+		let folder_path = self.config_folder_path();
+		if !folder_path.exists() {
+			std::fs::create_dir(folder_path)?;
+		}
+
+		let file_path = self.config_file_path();
+		let mut file = File::create(file_path)?;
+		let serialized = ron::ser::to_string_pretty(&self, PrettyConfig::new()).unwrap();
+		file.write_all(serialized.as_bytes())?;
+		Ok(())
 	}
 }
 impl Migrate for Aquarium {
@@ -77,7 +122,8 @@ impl ClientState for Aquarium {
 	}
 
 	fn on_start(&mut self, _context: &Context, _tasks: impl Tasker<Self>) {
-		self.load_files();
+		self.load_config();
+		_ = self.ls();
 	}
 }
 impl Reify for Aquarium {
@@ -92,6 +138,9 @@ impl Reify for Aquarium {
 				Grabbable::new(|state: &mut Self, pose| {
 					state.pose = pose;
 				})
+				.grab_stop(|state: &mut Self| {
+					let _ = state.save_config();
+				})
 				.pointer_mode(PointerMode::Move),
 			)
 			.build()
@@ -105,14 +154,18 @@ impl Reify for Aquarium {
 			)
 			.child(
 				FileWatcher::new(self.path.clone(), |state: &mut Self| {
-					state.load_files();
+					_ = state.ls();
 				})
 				.build(),
 			)
-			.children(self.files.iter().enumerate().map(|(i, f)| {
-				f.reify_substate(_context, _tasks.clone(), move |state: &mut Self| {
-					state.files.get_mut(i)
-				})
+			.stable_children(self.entries.iter().map(|(k, v)| {
+				(
+					k.clone(),
+					v.reify_substate(_context, _tasks.clone(), {
+						let k = k.clone();
+						move |state: &mut Self| state.entries.get_mut(&k)
+					}),
+				)
 			}))
 	}
 }
