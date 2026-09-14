@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
 	ClientState, Context, CustomElement, Entity, Migrate, Reify, Tasker, Transformable,
 	components::{Grabbable, PointerMode},
-	elements::{FileWatcher, Lines},
+	elements::{FileWatcher, Lines, Model},
 };
 use stardust_xr_fusion::{
 	fields::Shape,
@@ -35,6 +35,7 @@ pub struct Aquarium {
 	pose: Posef,
 	#[serde(skip)]
 	path: PathBuf,
+	aquascape_path: Option<PathBuf>,
 	shape: Shape,
 	entries: HashMap<String, Entry>,
 }
@@ -43,6 +44,7 @@ impl Default for Aquarium {
 		Self {
 			pose: Posef::default(),
 			path: std::env::home_dir().unwrap(),
+			aquascape_path: None,
 			shape: Shape::Box {
 				size: [0.75, 0.30, 0.30].into(),
 			},
@@ -151,6 +153,14 @@ impl Reify for Aquarium {
 						.map(|l| l.thickness(0.005).color(rgba_linear!(0.0, 0.1, 0.2, 1.0))),
 				)
 				.build(),
+			)
+			.maybe_child(
+				self.aquascape_path
+					.clone()
+					.and_then(|p| {
+						Model::direct(self.config_folder_path().join(p).canonicalize().ok()?).ok()
+					})
+					.map(|p| p.build()),
 			)
 			.child(
 				FileWatcher::new(self.path.clone(), |state: &mut Self| {
