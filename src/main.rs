@@ -71,6 +71,9 @@ impl Aquarium {
 				continue;
 			};
 			let file_name = entry.file_name();
+			if file_name == ".aquarium" {
+				continue;
+			}
 			let Some(file_name) = file_name.to_str() else {
 				continue;
 			};
