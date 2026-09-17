@@ -16,6 +16,7 @@ use stardust_xr_molecules::lines::{self, LineExt};
 use std::{collections::HashMap, fs::File, io::Write, path::PathBuf};
 
 pub mod entry;
+pub mod icon;
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -68,11 +69,12 @@ impl Aquarium {
 			}
 			self.entries.insert(
 				file_name.to_string(),
-				Entry {
-					name: file_name.to_string(),
-					pose: Posef::default(),
-				},
+				Entry::new(entry.path(), file_name.to_string()),
 			);
+		}
+
+		for entry in self.entries.values_mut() {
+			entry.rescan(self.path.join(&entry.name));
 		}
 
 		Ok(())
@@ -85,15 +87,15 @@ impl Aquarium {
 		self.config_folder_path().join("aquarium.ron")
 	}
 	pub fn load_config(&mut self) {
-		let pose = self.pose;
 		let Ok(config_file_contents) = std::fs::read_to_string(self.config_file_path()) else {
 			return;
 		};
 		let Ok(deserialized) = ron::from_str::<Self>(&config_file_contents) else {
 			return;
 		};
-		*self = deserialized;
-		self.pose = pose;
+		let old_self = std::mem::replace(self, deserialized);
+		self.path = old_self.path;
+		self.pose = old_self.pose;
 	}
 	pub fn save_config(&mut self) -> std::io::Result<()> {
 		let folder_path = self.config_folder_path();
