@@ -1,6 +1,7 @@
 use crate::{
 	Aquarium,
 	icon::{icon_bitmap, mime_type},
+	upright,
 };
 use mime::Mime;
 use serde::{Deserialize, Serialize};
@@ -56,11 +57,11 @@ impl Reify for Entry {
 		Entity::new(shape.clone())
 			.pose(self.pose)
 			.component(Poseable::new(|state: &mut Self, pose| {
-				state.pose = pose;
+				state.pose = upright(pose);
 			}))
 			.component(
 				Grabbable::new(|state: &mut Self, pose| {
-					state.pose = pose;
+					state.pose = upright(pose);
 				})
 				.pointer_mode(PointerMode::Move),
 			)
@@ -74,10 +75,7 @@ impl Reify for Entry {
 								"diffuse",
 								MaterialParameter::Texture {
 									value: Resource::Direct {
-										path: icon
-											.to_str()
-											.unwrap()
-											.to_string(),
+										path: icon.to_str().unwrap().to_string(),
 									},
 								},
 							)

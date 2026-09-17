@@ -1,5 +1,6 @@
 use crate::entry::Entry;
 use clap::Parser;
+use glam::{EulerRot, Quat};
 use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
@@ -17,6 +18,15 @@ use std::{collections::HashMap, fs::File, io::Write, path::PathBuf};
 
 pub mod entry;
 pub mod icon;
+
+/// everything in here sits on the floor of the tank, so tipping is never something a grab should do
+pub fn upright(pose: Posef) -> Posef {
+	Posef {
+		position: pose.position,
+		orientation: Quat::from_rotation_y(Quat::from(pose.orientation).to_euler(EulerRot::YXZ).0)
+			.into(),
+	}
+}
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
@@ -140,12 +150,12 @@ impl Reify for Aquarium {
 			.pose(self.pose)
 			.component(
 				Grabbable::new(|state: &mut Self, pose| {
-					state.pose = pose;
+					state.pose = upright(pose);
 				})
 				.grab_stop(|state: &mut Self| {
 					let _ = state.save_config();
 				})
-				.pointer_mode(PointerMode::Move),
+				.pointer_mode(PointerMode::Align),
 			)
 			.build()
 			.child(

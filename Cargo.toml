@@ -4,7 +4,7 @@ version = "0.52.0"
 edition = "2024"
 
 [dependencies]
-glam = { version = "0.33.7", features = ["serde"] }
+glam = { version = "0.33.7", features = ["mint", "serde"] }
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "*", features = ["rt", "tokio-macros", "sync"] }
 stardust-xr-fusion = "0.52.0"
