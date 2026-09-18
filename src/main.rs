@@ -131,11 +131,14 @@ impl ClientState for Aquarium {
 
 	fn initial_state_update(&mut self) {
 		let args = Args::parse();
-		let Some(path) = args.path else { return };
-		let Ok(canonicalized) = path.canonicalize() else {
+		let Some(path) = args
+			.path
+			.and_then(|p| p.canonicalize().ok())
+			.or_else(|| std::env::current_dir().ok())
+		else {
 			return;
 		};
-		self.path = canonicalized;
+		self.path = path;
 	}
 
 	fn on_start(&mut self, _context: &Context, _tasks: impl Tasker<Self>) {
