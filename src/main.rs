@@ -14,7 +14,7 @@ use stardust_xr_fusion::{
 	types::{Posef, rgba_linear},
 };
 use stardust_xr_molecules::lines::{self, LineExt};
-use std::{collections::HashMap, fs::File, io::Write, path::PathBuf};
+use std::{collections::HashMap, fs::File, io::Write, path::PathBuf, sync::Arc};
 
 pub mod entry;
 pub mod icon;
@@ -47,7 +47,7 @@ pub struct Aquarium {
 	#[serde(skip)]
 	path: PathBuf,
 	aquascape_path: Option<PathBuf>,
-	shape: Shape,
+	shape: Arc<Shape>,
 	entries: HashMap<String, Entry>,
 }
 impl Default for Aquarium {
@@ -56,9 +56,9 @@ impl Default for Aquarium {
 			pose: Posef::default(),
 			path: std::env::home_dir().unwrap(),
 			aquascape_path: None,
-			shape: Shape::Box {
+			shape: Arc::new(Shape::Box {
 				size: [0.75, 0.30, 0.30].into(),
-			},
+			}),
 			entries: HashMap::default(),
 		}
 	}
@@ -151,8 +151,9 @@ impl Reify for Aquarium {
 		&self,
 		_context: &Context,
 		_tasks: impl Tasker<Self>,
+		_props: (),
 	) -> impl stardust_xr_asteroids::Element<Self> {
-		Entity::new(self.shape.clone())
+		Entity::new(self.shape.as_ref().clone())
 			.pose(self.pose)
 			.component(
 				Grabbable::new(|state: &mut Self, pose| {
@@ -166,7 +167,7 @@ impl Reify for Aquarium {
 			.build()
 			.child(
 				Lines::new(
-					lines::shape(self.shape.clone())
+					lines::shape(self.shape.as_ref().clone())
 						.into_iter()
 						.map(|l| l.thickness(0.005).color(rgba_linear!(0.0, 0.1, 0.2, 1.0))),
 				)
@@ -189,7 +190,7 @@ impl Reify for Aquarium {
 			.stable_children(self.entries.iter().map(|(k, v)| {
 				(
 					k.clone(),
-					v.reify_substate(_context, _tasks.clone(), {
+					v.reify_substate(_context, _tasks.clone(), &self.shape, {
 						let k = k.clone();
 						move |state: &mut Self| state.entries.get_mut(&k)
 					}),

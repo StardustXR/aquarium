@@ -8,15 +8,14 @@ use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
 	ClientState, Context, CustomElement, Element, Entity, Reify, Tasker, Transformable,
 	components::{Grabbable, PointerMode, Poseable},
-	elements::{Lines, Model, ModelPart, Text},
+	elements::{Model, ModelPart, Text},
 };
 use stardust_xr_fusion::{
 	drawable::MaterialParameter,
 	fields::Shape,
 	types::{Posef, Resource},
 };
-use stardust_xr_molecules::lines::{self, LineExt};
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Entry {
@@ -49,8 +48,13 @@ impl Entry {
 		self.mime = Some(mime);
 	}
 }
-impl Reify for Entry {
-	fn reify(&self, _context: &Context, _tasks: impl Tasker<Self>) -> impl Element<Self> {
+impl Reify<&Arc<Shape>> for Entry {
+	fn reify(
+		&self,
+		_context: &Context,
+		_tasks: impl Tasker<Self>,
+		tank_shape: &Arc<Shape>,
+	) -> impl Element<Self> {
 		let shape = Shape::Box {
 			size: [0.05, 0.05, 0.01].into(),
 		};
@@ -60,8 +64,15 @@ impl Reify for Entry {
 				state.pose = upright(pose);
 			}))
 			.component(
-				Grabbable::new(|state: &mut Self, pose| {
-					state.pose = upright(pose);
+				Grabbable::new({
+					let tank_shape = tank_shape.clone();
+					move |state: &mut Self, mut pose| {
+						let sample = tank_shape.sample(pose.position);
+						if sample.distance > 0.0 {
+							pose.position = sample.closest_point;
+						}
+						state.pose = upright(pose);
+					}
 				})
 				.pointer_mode(PointerMode::Move),
 			)

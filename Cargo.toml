@@ -5,14 +5,18 @@ edition = "2024"
 
 [dependencies]
 glam = { version = "0.33.7", features = ["mint", "serde"] }
-serde = { version = "1.0.219", features = ["derive"] }
+serde = { version = "1.0.219", features = ["derive", "rc"] }
 tokio = { version = "*", features = ["rt", "tokio-macros", "sync"] }
 stardust-xr-fusion = "0.52.0"
 stardust-xr-molecules = "0.52.0"
-stardust-xr-asteroids = "0.52.0"
+# stardust-xr-asteroids = "0.52.0"
 clap = { version = "4.6.6", features = ["derive"] }
 ron = "0.12.2"
 xdg-mime = "0.4.0"
 freedesktop-icons = "0.4.0"
 mime = "0.3"
 resvg = "0.48.1"
+
+[dependencies.stardust-xr-asteroids]
+version = "0.52.0"
+git = "https://github.com/StardustXR/asteroids.git"
