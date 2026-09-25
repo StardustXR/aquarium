@@ -6,8 +6,8 @@ use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
 	ClientState, Context, CustomElement, Entity, Migrate, Reify, Tasker, Transformable,
-	components::{Grabbable, PointerMode},
-	elements::{FileWatcher, Lines, Model},
+	components::{Grabbable, Lines, PointerMode},
+	elements::{FileWatcher, Model},
 };
 use stardust_xr_fusion::{
 	fields::Shape,
@@ -165,15 +165,12 @@ impl Reify for Aquarium {
 				})
 				.pointer_mode(PointerMode::Align),
 			)
+			.component(Lines::new(
+				lines::shape(self.shape.as_ref().clone())
+					.into_iter()
+					.map(|l| l.thickness(0.005).color(rgba_linear!(0.0, 0.1, 0.2, 1.0))),
+			))
 			.build()
-			.child(
-				Lines::new(
-					lines::shape(self.shape.as_ref().clone())
-						.into_iter()
-						.map(|l| l.thickness(0.005).color(rgba_linear!(0.0, 0.1, 0.2, 1.0))),
-				)
-				.build(),
-			)
 			.maybe_child(
 				self.aquascape_path
 					.clone()

@@ -1803,7 +1803,7 @@ dependencies = [
 [[package]]
 name = "stardust-xr-asteroids"
 version = "0.52.0"
-source = "git+https://github.com/StardustXR/asteroids.git#d016557cc1687ffdf1ea0c7b288362f58166809c"
+source = "git+https://github.com/StardustXR/asteroids.git#4ac3672b2127ae2eeea8439c040a52f671646563"
 dependencies = [
  "bumpalo",
  "derive-where",
