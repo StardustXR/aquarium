@@ -1,6 +1,7 @@
 use crate::entry::Entry;
 use clap::Parser;
 use glam::{EulerRot, Quat};
+use indexmap::IndexMap;
 use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
@@ -14,7 +15,7 @@ use stardust_xr_fusion::{
 	types::{Posef, rgba_linear},
 };
 use stardust_xr_molecules::lines::{self, LineExt};
-use std::{collections::HashMap, fs::File, io::Write, path::PathBuf, sync::Arc};
+use std::{fs::File, io::Write, path::PathBuf, sync::Arc};
 
 pub mod entry;
 pub mod icon;
@@ -48,7 +49,7 @@ pub struct Aquarium {
 	path: PathBuf,
 	aquascape_path: Option<PathBuf>,
 	shape: Arc<Shape>,
-	entries: HashMap<String, Entry>,
+	entries: IndexMap<String, Entry>,
 }
 impl Default for Aquarium {
 	fn default() -> Self {
@@ -59,7 +60,7 @@ impl Default for Aquarium {
 			shape: Arc::new(Shape::Box {
 				size: [0.75, 0.30, 0.30].into(),
 			}),
-			entries: HashMap::default(),
+			entries: IndexMap::default(),
 		}
 	}
 }

@@ -19,8 +19,7 @@ use stardust_xr_fusion::{
 };
 use stardust_xr_molecules::lines::{LineExt, line_from_points};
 use std::{
-	borrow::Cow, env::current_exe, ffi::OsString, path::PathBuf, process::Command, str::FromStr,
-	sync::Arc,
+	env::current_exe, ffi::OsString, path::PathBuf, process::Command, str::FromStr, sync::Arc,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -32,7 +31,6 @@ pub struct Entry {
 	pub start_pose: Posef,
 	#[serde(skip)]
 	pub outside_tank: bool,
-
 	#[serde(skip)]
 	pub path: PathBuf,
 	#[serde(skip)]
@@ -146,6 +144,7 @@ impl Reify<(Posef, &Arc<Shape>)> for Entry {
 						let sample = tank_shape.sample(state.pose.position);
 						if sample.distance > 0.0 {
 							state.open(&context, tank_pose);
+
 							state.pose = state.start_pose;
 						}
 						state.outside_tank = false;
