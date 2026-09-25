@@ -190,7 +190,7 @@ impl Reify for Aquarium {
 			.stable_children(self.entries.iter().map(|(k, v)| {
 				(
 					k.clone(),
-					v.reify_substate(_context, _tasks.clone(), &self.shape, {
+					v.reify_substate(_context, _tasks.clone(), (self.pose, &self.shape), {
 						let k = k.clone();
 						move |state: &mut Self| state.entries.get_mut(&k)
 					}),

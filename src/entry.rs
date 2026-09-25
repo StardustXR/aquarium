@@ -3,24 +3,32 @@ use crate::{
 	icon::{icon_bitmap, mime_type},
 	upright,
 };
+use glam::{Quat, Vec3};
 use mime::Mime;
 use serde::{Deserialize, Serialize};
 use stardust_xr_asteroids::{
 	ClientState, Context, CustomElement, Element, Entity, Reify, Tasker, Transformable,
 	components::{Grabbable, PointerMode, Poseable},
-	elements::{Model, ModelPart, Text},
+	elements::{Lines, Model, ModelPart, Text},
 };
 use stardust_xr_fusion::{
 	drawable::MaterialParameter,
 	fields::Shape,
+	spatial::{Spatial, SpatialExt, Transform},
 	types::{Posef, Resource},
 };
-use std::{path::PathBuf, sync::Arc};
+use stardust_xr_molecules::lines::{LineExt, line_from_points};
+use std::{path::PathBuf, process::Command, sync::Arc};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Entry {
 	pub name: String,
 	pub pose: Posef,
+
+	#[serde(skip)]
+	pub start_pose: Posef,
+	#[serde(skip)]
+	pub outside_tank: bool,
 
 	#[serde(skip)]
 	pub path: PathBuf,
@@ -34,6 +42,9 @@ impl Entry {
 		let mut entry = Self {
 			name,
 			pose: Posef::default(),
+			start_pose: Posef::default(),
+			outside_tank: false,
+
 			path: PathBuf::new(),
 			mime: None,
 			icon: None,
@@ -47,31 +58,85 @@ impl Entry {
 		self.icon = icon_bitmap(&mime);
 		self.mime = Some(mime);
 	}
+	pub fn open(&self, context: &Context, tank_pose: Posef) {
+		let client = context.stardust_client.clone();
+		let path = self.path.clone();
+		let r = Quat::from(tank_pose.orientation);
+		let pose = Transform::from_translation_rotation(
+			Vec3::from(tank_pose.position) + r * Vec3::from(self.pose.position),
+			r * Quat::from(self.pose.orientation),
+		);
+		tokio::spawn(async move {
+			// the server snapshots the spatial's transform into the token, so it can drop right after
+			let token = async {
+				let (_spatial, spatial_ref) =
+					Spatial::new(&client, client.root(), pose).await.ok()?;
+				client.generate_startup_token(spatial_ref).await.ok()
+			}
+			.await;
+
+			let mut cmd = Command::new("xdg-open");
+			cmd.arg(path);
+			if let Some(token) = token {
+				cmd.env("STARDUST_STARTUP_TOKEN", token);
+			}
+			let Ok(mut child) = cmd.spawn() else {
+				return;
+			};
+			// xdg-open exits right away, reap it so it doesn't sit around as a zombie
+			std::thread::spawn(move || child.wait());
+		});
+	}
 }
-impl Reify<&Arc<Shape>> for Entry {
+impl Reify<(Posef, &Arc<Shape>)> for Entry {
 	fn reify(
 		&self,
-		_context: &Context,
+		context: &Context,
 		_tasks: impl Tasker<Self>,
-		tank_shape: &Arc<Shape>,
+		tank_pose_shape: (Posef, &Arc<Shape>),
 	) -> impl Element<Self> {
 		let shape = Shape::Box {
 			size: [0.05, 0.05, 0.01].into(),
 		};
 		Entity::new(shape.clone())
-			.pose(self.pose)
-			.component(Poseable::new(|state: &mut Self, pose| {
-				state.pose = upright(pose);
+			.pose(if self.outside_tank {
+				self.start_pose
+			} else {
+				self.pose
+			})
+			.component(Poseable::new({
+				let tank_shape = tank_pose_shape.1.clone();
+				move |state: &mut Self, mut pose| {
+					let sample = tank_shape.sample(pose.position);
+					if sample.distance > 0.0 {
+						pose.position = sample.closest_point;
+					}
+					state.pose = upright(pose);
+				}
 			}))
 			.component(
 				Grabbable::new({
-					let tank_shape = tank_shape.clone();
-					move |state: &mut Self, mut pose| {
+					let tank_shape = tank_pose_shape.1.clone();
+					move |state: &mut Self, pose| {
 						let sample = tank_shape.sample(pose.position);
-						if sample.distance > 0.0 {
-							pose.position = sample.closest_point;
-						}
+						state.outside_tank = sample.distance > 0.0;
 						state.pose = upright(pose);
+					}
+				})
+				.grab_start(|state: &mut Self| {
+					state.start_pose = state.pose;
+				})
+				.grab_stop({
+					let context = context.clone();
+					let tank_pose = tank_pose_shape.0;
+					let tank_shape = tank_pose_shape.1.clone();
+					move |state: &mut Self| {
+						let sample = tank_shape.sample(state.pose.position);
+						if sample.distance > 0.0 {
+							state.open(&context, tank_pose);
+							state.pose = state.start_pose;
+						}
+						state.outside_tank = false;
 					}
 				})
 				.pointer_mode(PointerMode::Move),
@@ -98,5 +163,13 @@ impl Reify<&Arc<Shape>> for Entry {
 			)
 			// .child(Lines::new(lines::shape(shape).into_iter().map(|l| l.thickness(0.0025))).build())
 			.child(Text::new(&self.name).pos([0.0, -0.03, 0.0]).build())
+			.maybe_child(self.outside_tank.then(|| {
+				Lines::new([line_from_points(vec![
+					[0.0; 3].into(),
+					Vec3::from(self.pose.position) - Vec3::from(self.start_pose.position),
+				])
+				.thickness(0.005)])
+				.build()
+			}))
 	}
 }
