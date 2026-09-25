@@ -1,0 +1,29 @@
+(
+    aquascape_path: None,
+    shape: Box(
+        size: (0.75, 0.3, 0.3),
+    ),
+    entries: {
+        "main.rs": (
+            name: "main.rs",
+            pose: (
+                position: (0.09202365, -0.009171575, 0.019735843),
+                orientation: (0.0, 0.0000000074505895, 0.0, 1.0),
+            ),
+        ),
+        "icon.rs": (
+            name: "icon.rs",
+            pose: (
+                position: (-0.16725141, 0.016669057, 0.013322115),
+                orientation: (0.0, -0.00000020861624, 0.0, 1.0),
+            ),
+        ),
+        "entry.rs": (
+            name: "entry.rs",
+            pose: (
+                position: (-0.00042869896, -0.06857717, 0.015022069),
+                orientation: (0.0, 0.00000008940698, 0.0, 1.0),
+            ),
+        ),
+    },
+)

@@ -18,7 +18,10 @@ use stardust_xr_fusion::{
 	types::{Posef, Resource},
 };
 use stardust_xr_molecules::lines::{LineExt, line_from_points};
-use std::{path::PathBuf, process::Command, sync::Arc};
+use std::{
+	borrow::Cow, env::current_exe, ffi::OsString, path::PathBuf, process::Command, str::FromStr,
+	sync::Arc,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Entry {
@@ -36,6 +39,8 @@ pub struct Entry {
 	pub mime: Option<Mime>,
 	#[serde(skip)]
 	pub icon: Option<PathBuf>,
+	#[serde(skip)]
+	pub is_dir: bool,
 }
 impl Entry {
 	pub fn new(path: PathBuf, name: String) -> Self {
@@ -48,6 +53,7 @@ impl Entry {
 			path: PathBuf::new(),
 			mime: None,
 			icon: None,
+			is_dir: false,
 		};
 		entry.rescan(path);
 		entry
@@ -57,10 +63,12 @@ impl Entry {
 		let mime = mime_type(&self.path);
 		self.icon = icon_bitmap(&mime);
 		self.mime = Some(mime);
+		self.is_dir = self.path.is_dir();
 	}
 	pub fn open(&self, context: &Context, tank_pose: Posef) {
 		let client = context.stardust_client.clone();
 		let path = self.path.clone();
+		let is_dir = self.is_dir;
 		let r = Quat::from(tank_pose.orientation);
 		let pose = Transform::from_translation_rotation(
 			Vec3::from(tank_pose.position) + r * Vec3::from(self.pose.position),
@@ -75,7 +83,11 @@ impl Entry {
 			}
 			.await;
 
-			let mut cmd = Command::new("xdg-open");
+			let mut cmd = Command::new(if is_dir && let Ok(current_exe) = current_exe() {
+				current_exe.into_os_string()
+			} else {
+				OsString::from_str("xdg-open").unwrap()
+			});
 			cmd.arg(path);
 			if let Some(token) = token {
 				cmd.env("STARDUST_STARTUP_TOKEN", token);
